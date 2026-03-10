@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(py --version)",
+      "Bash(where py:*)",
+      "WebFetch(domain:developers.deepgram.com)",
+      "WebSearch",
+      "WebFetch(domain:www.assemblyai.com)",
+      "WebFetch(domain:support.assemblyai.com)",
+      "Bash(git init:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(where choco:*)",
+      "Bash(where scoop:*)",
+      "Bash(where conda:*)",
+      "Bash(npm install:*)",
+      "Read(//c/Users/cmorgan/AppData/Local/Temp/claude/c--Users-cmorgan-RAW-transcribe/tasks/**)",
+      "Bash(npm uninstall:*)"
+    ]
+  }
+}
