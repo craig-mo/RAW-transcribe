@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RAW Transcribe</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: #1a1a2e; color: #e0e0e0; padding: 2rem; max-width: 900px; margin: 0 auto; }
+    h1 { margin-bottom: 0.25rem; color: #e94560; }
+    .subtitle { color: #888; margin-bottom: 1.5rem; font-size: 0.9rem; }
+    label { display: block; margin-bottom: 0.25rem; font-weight: 600; font-size: 0.85rem; color: #aaa; }
+    select, button, textarea { font-family: inherit; font-size: 0.95rem; }
+    select { background: #16213e; color: #e0e0e0; border: 1px solid #333; padding: 0.5rem; border-radius: 4px; width: 100%; }
+    button { cursor: pointer; border: none; border-radius: 4px; padding: 0.6rem 1.4rem; font-weight: 600; transition: opacity 0.2s; }
+    button:hover { opacity: 0.85; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-record { background: #e94560; color: #fff; font-size: 1.1rem; }
+    .btn-record.recording { background: #ff6b6b; animation: pulse 1s infinite; }
+    .btn-transcribe { background: #0f3460; color: #fff; }
+    .btn-copy { background: #533483; color: #fff; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+
+    .controls { display: flex; gap: 1rem; align-items: end; flex-wrap: wrap; margin-bottom: 1rem; }
+    .controls > div { flex: 1; min-width: 180px; }
+    .actions { display: flex; gap: 0.75rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; }
+    .status { font-size: 0.85rem; color: #888; margin-left: 0.5rem; }
+
+    .options { background: #16213e; border: 1px solid #333; border-radius: 6px; padding: 1rem; margin-bottom: 1rem; }
+    .options h3 { font-size: 0.9rem; color: #e94560; margin-bottom: 0.75rem; }
+    .option-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem; }
+    .option-row input[type="checkbox"] { accent-color: #e94560; }
+    .option-row label { margin: 0; font-weight: 400; font-size: 0.85rem; }
+    .option-row select { width: auto; min-width: 120px; }
+
+    textarea { width: 100%; min-height: 350px; background: #0f0f23; color: #e0e0e0; border: 1px solid #333; border-radius: 6px; padding: 1rem; resize: vertical; font-size: 0.9rem; line-height: 1.6; }
+    .timer { font-variant-numeric: tabular-nums; color: #e94560; font-weight: 600; font-size: 1.1rem; min-width: 60px; }
+  </style>
+</head>
+<body>
+
+<h1>RAW Transcribe</h1>
+<p class="subtitle">Record &rarr; Transcribe &rarr; Copy. Preserves filler words, disfluencies &amp; timestamps.</p>
+
+<!-- Model selector -->
+<div class="controls">
+  <div>
+    <label for="model">Transcription Model</label>
+    <select id="model">
+      <option value="deepgram">DeepGram (Nova-3)</option>
+      <option value="assemblyai">AssemblyAI (Universal-3 Pro)</option>
+    </select>
+  </div>
+</div>
+
+<!-- DeepGram options -->
+<div class="options" id="opts-deepgram">
+  <h3>DeepGram Options</h3>
+  <div class="option-row">
+    <input type="checkbox" id="dg-filler" checked>
+    <label for="dg-filler">Filler words (um, uh, mhmm)</label>
+  </div>
+  <div class="option-row">
+    <input type="checkbox" id="dg-punctuate" checked>
+    <label for="dg-punctuate">Punctuation</label>
+  </div>
+  <div class="option-row">
+    <input type="checkbox" id="dg-smart-format">
+    <label for="dg-smart-format">Smart format (dates, numbers, etc.)</label>
+  </div>
+  <div class="option-row">
+    <input type="checkbox" id="dg-utterances" checked>
+    <label for="dg-utterances">Utterance segmentation</label>
+  </div>
+  <div class="option-row">
+    <input type="checkbox" id="dg-diarize">
+    <label for="dg-diarize">Speaker diarization</label>
+  </div>
+  <div class="option-row">
+    <label for="dg-model" style="min-width:50px">Model:</label>
+    <select id="dg-model">
+      <option value="nova-3" selected>Nova-3 (best)</option>
+      <option value="nova-2">Nova-2</option>
+      <option value="whisper-large">Whisper Large</option>
+    </select>
+  </div>
+</div>
+
+<!-- AssemblyAI options -->
+<div class="options" id="opts-assemblyai" style="display:none">
+  <h3>AssemblyAI Options</h3>
+  <div class="option-row">
+    <input type="checkbox" id="aai-disfluencies" checked>
+    <label for="aai-disfluencies">Disfluencies / filler words</label>
+  </div>
+  <div class="option-row">
+    <input type="checkbox" id="aai-punctuate" checked>
+    <label for="aai-punctuate">Punctuation</label>
+  </div>
+  <div class="option-row">
+    <input type="checkbox" id="aai-format" checked>
+    <label for="aai-format">Text formatting</label>
+  </div>
+  <div class="option-row">
+    <input type="checkbox" id="aai-speakers">
+    <label for="aai-speakers">Speaker labels</label>
+  </div>
+</div>
+
+<!-- Record / Transcribe / Copy -->
+<div class="actions">
+  <button class="btn-record" id="btn-record">Record</button>
+  <span class="timer" id="timer">0:00</span>
+  <button class="btn-transcribe" id="btn-transcribe" disabled>Transcribe</button>
+  <button class="btn-copy" id="btn-copy" disabled>Copy Text</button>
+  <span class="status" id="status"></span>
+</div>
+
+<!-- Output -->
+<textarea id="output" readonly placeholder="Transcribed text will appear here..."></textarea>
+
+<script>
+// ── State ──
+let mediaRecorder = null;
+let audioChunks = [];
+let audioBlob = null;
+let timerInterval = null;
+let seconds = 0;
+
+const $ = (id) => document.getElementById(id);
+
+// ── Model switching ──
+$("model").addEventListener("change", () => {
+  const m = $("model").value;
+  $("opts-deepgram").style.display = m === "deepgram" ? "block" : "none";
+  $("opts-assemblyai").style.display = m === "assemblyai" ? "block" : "none";
+});
+
+// ── Timer ──
+function startTimer() {
+  seconds = 0;
+  updateTimer();
+  timerInterval = setInterval(() => { seconds++; updateTimer(); }, 1000);
+}
+function stopTimer() { clearInterval(timerInterval); }
+function updateTimer() {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  $("timer").textContent = m + ":" + String(s).padStart(2, "0");
+}
+
+// ── Recording ──
+$("btn-record").addEventListener("click", async () => {
+  if (mediaRecorder && mediaRecorder.state === "recording") {
+    mediaRecorder.stop();
+    $("btn-record").textContent = "Record";
+    $("btn-record").classList.remove("recording");
+    stopTimer();
+    return;
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioChunks = [];
+    mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm;codecs=opus" });
+
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) audioChunks.push(e.data);
+    };
+
+    mediaRecorder.onstop = () => {
+      audioBlob = new Blob(audioChunks, { type: "audio/webm" });
+      stream.getTracks().forEach((t) => t.stop());
+      $("btn-transcribe").disabled = false;
+      setStatus("Recording saved (" + (audioBlob.size / 1024).toFixed(0) + " KB). Ready to transcribe.");
+    };
+
+    mediaRecorder.start(1000); // collect in 1s chunks
+    $("btn-record").textContent = "Stop";
+    $("btn-record").classList.add("recording");
+    $("btn-transcribe").disabled = true;
+    setStatus("Recording...");
+    startTimer();
+  } catch (err) {
+    setStatus("Microphone error: " + err.message);
+  }
+});
+
+// ── Transcription ──
+$("btn-transcribe").addEventListener("click", async () => {
+  if (!audioBlob) return;
+  const model = $("model").value;
+  $("btn-transcribe").disabled = true;
+  $("output").value = "";
+  setStatus("Transcribing with " + model + "...");
+
+  try {
+    if (model === "deepgram") {
+      await transcribeDeepGram();
+    } else {
+      await transcribeAssemblyAI();
+    }
+    $("btn-copy").disabled = false;
+  } catch (err) {
+    setStatus("Error: " + err.message);
+  }
+  $("btn-transcribe").disabled = false;
+});
+
+// ── DeepGram ──
+async function transcribeDeepGram() {
+  const params = new URLSearchParams();
+  params.set("model", $("dg-model").value);
+  if ($("dg-filler").checked) params.set("filler_words", "true");
+  if ($("dg-punctuate").checked) params.set("punctuate", "true");
+  if ($("dg-smart-format").checked) params.set("smart_format", "true");
+  if ($("dg-utterances").checked) params.set("utterances", "true");
+  if ($("dg-diarize").checked) params.set("diarize", "true");
+
+  const resp = await fetch("/api/deepgram?" + params.toString(), {
+    method: "POST",
+    headers: { "Content-Type": "audio/webm" },
+    body: audioBlob,
+  });
+
+  if (!resp.ok) {
+    const errText = await resp.text();
+    throw new Error("DeepGram " + resp.status + ": " + errText);
+  }
+
+  const data = await resp.json();
+  $("output").value = formatDeepGramOutput(data);
+  setStatus("Done! Transcription complete.");
+}
+
+function formatDeepGramOutput(data) {
+  const alt = data.results?.channels?.[0]?.alternatives?.[0];
+  if (!alt) return "No transcription returned.";
+
+  let out = "";
+
+  // If utterances are available, format by utterance with timestamps
+  if (data.results.utterances && data.results.utterances.length > 0) {
+    for (const utt of data.results.utterances) {
+      const ts = formatTime(utt.start);
+      const speaker = utt.speaker !== undefined ? "[Speaker " + utt.speaker + "] " : "";
+      out += "[" + ts + "] " + speaker + utt.transcript + "\n\n";
+    }
+    return out.trim();
+  }
+
+  // Otherwise, format words with periodic timestamps
+  if (alt.words && alt.words.length > 0) {
+    let lastTs = -999;
+    for (const w of alt.words) {
+      // Insert timestamp every ~5 seconds
+      if (w.start - lastTs >= 5) {
+        if (out) out += "\n";
+        out += "[" + formatTime(w.start) + "] ";
+        lastTs = w.start;
+      }
+      const word = w.punctuated_word || w.word;
+      out += word + " ";
+    }
+    return out.trim();
+  }
+
+  return alt.transcript || "No transcription returned.";
+}
+
+// ── AssemblyAI ──
+async function transcribeAssemblyAI() {
+  // Step 1: Upload audio
+  setStatus("Uploading audio to AssemblyAI...");
+  const uploadResp = await fetch("/api/assemblyai/upload", {
+    method: "POST",
+    headers: { "Content-Type": "application/octet-stream" },
+    body: audioBlob,
+  });
+  if (!uploadResp.ok) throw new Error("Upload failed: " + uploadResp.status);
+  const { upload_url } = await uploadResp.json();
+
+  // Step 2: Request transcription
+  setStatus("Transcription queued...");
+  const transcribeBody = {
+    audio_url: upload_url,
+    disfluencies: $("aai-disfluencies").checked,
+    punctuate: $("aai-punctuate").checked,
+    format_text: $("aai-format").checked,
+    speaker_labels: $("aai-speakers").checked,
+  };
+
+  const txResp = await fetch("/api/assemblyai/transcribe", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(transcribeBody),
+  });
+  if (!txResp.ok) throw new Error("Transcribe request failed: " + txResp.status);
+  const { id } = await txResp.json();
+
+  // Step 3: Poll for result
+  let result;
+  while (true) {
+    await new Promise((r) => setTimeout(r, 3000));
+    const pollResp = await fetch("/api/assemblyai/transcript/" + id);
+    result = await pollResp.json();
+    if (result.status === "completed") break;
+    if (result.status === "error") throw new Error("AssemblyAI error: " + (result.error || "unknown"));
+    setStatus("Processing... (" + result.status + ")");
+  }
+
+  $("output").value = formatAssemblyAIOutput(result);
+  setStatus("Done! Transcription complete.");
+}
+
+function formatAssemblyAIOutput(data) {
+  // If speaker labels, format by utterance
+  if (data.utterances && data.utterances.length > 0) {
+    let out = "";
+    for (const utt of data.utterances) {
+      const ts = formatTime(utt.start / 1000); // ms to seconds
+      out += "[" + ts + "] [Speaker " + utt.speaker + "] " + utt.text + "\n\n";
+    }
+    return out.trim();
+  }
+
+  // Otherwise, words with periodic timestamps
+  if (data.words && data.words.length > 0) {
+    let out = "";
+    let lastTs = -999;
+    for (const w of data.words) {
+      const sec = w.start / 1000;
+      if (sec - lastTs >= 5) {
+        if (out) out += "\n";
+        out += "[" + formatTime(sec) + "] ";
+        lastTs = sec;
+      }
+      out += w.text + " ";
+    }
+    return out.trim();
+  }
+
+  return data.text || "No transcription returned.";
+}
+
+// ── Helpers ──
+function formatTime(sec) {
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return m + ":" + String(s).padStart(2, "0");
+}
+
+function setStatus(msg) { $("status").textContent = msg; }
+
+// ── Copy ──
+$("btn-copy").addEventListener("click", () => {
+  $("output").select();
+  navigator.clipboard.writeText($("output").value);
+  setStatus("Copied to clipboard!");
+});
+</script>
+
+</body>
+</html>
