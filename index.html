@@ -244,7 +244,7 @@ function formatDeepGramOutput(data) {
     for (const utt of data.results.utterances) {
       const ts = formatTime(utt.start);
       const speaker = utt.speaker !== undefined ? "[Speaker " + utt.speaker + "] " : "";
-      out += "[" + ts + "] " + speaker + utt.transcript + "\n\n";
+      out += "[" + ts + "] " + speaker + utt.transcript + "\n";
     }
     return out.trim();
   }
