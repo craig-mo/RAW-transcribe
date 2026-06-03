@@ -24,7 +24,6 @@ Dead-simple interview practice recorder with verbatim transcription. Preserves f
 5. Click **Copy Text** to grab the transcript for your interview coach
 
 ## Project Structure
-
 ```
 index.html          The entire app UI (single page, no framework)
 server.js           Thin Node.js proxy for API calls (~130 lines, zero dependencies)
