@@ -129,6 +129,12 @@ let seconds = 0;
 
 const $ = (id) => document.getElementById(id);
 
+// ── Keep-alive ──
+// Holds a connection open for the page's lifetime so the server can
+// auto-shutdown when this tab/window closes. EventSource auto-reconnects,
+// so reloads/navigation won't trigger a shutdown.
+try { new EventSource("/api/keepalive"); } catch (e) {}
+
 // ── Model switching ──
 $("model").addEventListener("change", () => {
   const m = $("model").value;

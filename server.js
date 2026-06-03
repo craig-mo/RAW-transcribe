@@ -19,6 +19,25 @@ const MIME = {
   ".json": "application/json",
 };
 
+// ── Auto-shutdown when the browser tab/window closes ──
+// The page holds an EventSource open to /api/keepalive. When every such
+// connection drops (tab closed, window closed, browser quit) and none
+// reconnects within the grace window, the server exits on its own. A brief
+// grace period lets page reloads/navigation reconnect without killing it.
+let liveClients = 0;
+let shutdownTimer = null;
+const GRACE_MS = 4000;
+
+function scheduleShutdown(graceMs) {
+  if (shutdownTimer) clearTimeout(shutdownTimer);
+  shutdownTimer = setTimeout(() => {
+    if (liveClients <= 0) {
+      console.log("No active browser clients — shutting down.");
+      process.exit(0);
+    }
+  }, graceMs);
+}
+
 function proxyRequest(options, body, res) {
   const req = https.request(options, (upstream) => {
     const chunks = [];
@@ -49,6 +68,29 @@ const server = http.createServer((req, res) => {
       "Access-Control-Allow-Headers": "Content-Type",
     });
     return res.end();
+  }
+
+  // ── Keep-alive stream (drives auto-shutdown on browser close) ──
+  if (req.method === "GET" && req.url === "/api/keepalive") {
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      "Access-Control-Allow-Origin": "*",
+    });
+    res.write("retry: 1000\n\n"); // tell EventSource to reconnect quickly
+    liveClients++;
+    if (shutdownTimer) {
+      clearTimeout(shutdownTimer);
+      shutdownTimer = null;
+    }
+    const ping = setInterval(() => res.write(": ping\n\n"), 25000);
+    req.on("close", () => {
+      clearInterval(ping);
+      liveClients = Math.max(0, liveClients - 1);
+      if (liveClients === 0) scheduleShutdown(GRACE_MS);
+    });
+    return;
   }
 
   // ── DeepGram proxy ──
@@ -154,4 +196,6 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, () => {
   console.log(`RAW-transcribe server running at http://localhost:${PORT}`);
+  // If the browser never connects (e.g. it failed to open), don't linger forever.
+  scheduleShutdown(30000);
 });
